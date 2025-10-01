@@ -8,8 +8,8 @@
   body{margin:0;font-family:Arial, sans-serif;background:#0b1220;color:#e5f0ff}
   header{padding:12px;background:#101a2f;position:sticky;top:0;z-index:10}
   h1{margin:0 0 10px;font-size:18px}
-  select,input{padding:6px;border-radius:6px;border:1px solid #22314b;background:#0b1528;color:#e5f0ff;font-size:14px}
-  .filtros{display:flex;flex-wrap:wrap;gap:6px}
+  select,input,button{padding:6px;border-radius:6px;border:1px solid #22314b;background:#0b1528;color:#e5f0ff;font-size:14px}
+  .filtros{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
   .somas{margin:10px 0;padding:10px;background:#101a2f;border:1px solid #22314b;border-radius:6px;font-size:14px}
   table{width:100%;border-collapse:collapse;font-size:14px}
   th,td{padding:8px;border-bottom:1px solid #22314b;text-align:left;vertical-align:top}
@@ -21,6 +21,7 @@
   .status.liquidado{color:#3b82f6}
   b.obs-leonardo{color:#ef4444;font-weight:700}
   tr.linha-confirmada {background-color:rgba(22,163,74,0.15);transition:background 0.3s ease;}
+  button.mass-action {margin-left:auto;background:#16a34a;cursor:pointer}
 </style>
 </head>
 <body>
@@ -49,6 +50,7 @@
       <option value="cap m.kids">M.KIDS</option>
     </select>
     <input type="text" id="barraPesquisa" placeholder="🔍 Pesquisar..." />
+    <button class="mass-action" onclick="liquidarMassa()">✓ Liquidar em Massa</button>
   </div>
 </header>
 
@@ -77,7 +79,7 @@ const endpoint="https://script.google.com/macros/s/AKfycbzJS4UkF6WZ-duyMJW_h3e5f
 const EMPRESAS=["cap delicia","cap villa","cap padaria","cap mercatto","cap m.kids"];
 const BRL=n=>(isNaN(n)?0:n).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const iso = d => {const dt=new Date(d);dt.setMinutes(dt.getMinutes()-dt.getTimezoneOffset());return dt.toISOString().slice(0,10);};
-let TODOS=[];
+let TODOS=[], FILTRADOS=[];
 
 function render(){
   const lista=document.getElementById("lista");
@@ -87,7 +89,7 @@ function render(){
   const empresa=document.getElementById("filtroEmpresa").value;
   const termo=document.getElementById("barraPesquisa").value.toLowerCase();
 
-  const filtrados=TODOS.filter(t=>{
+  FILTRADOS=TODOS.filter(t=>{
     if(status && (t.status||"").toLowerCase().trim() !== status.toLowerCase().trim()) return false;
     if(meio && (t.meio_pagamento||"").toLowerCase().trim() !== meio.toLowerCase().trim()) return false;
     if(empresa && (t.empresa||"").toLowerCase().trim() !== empresa.toLowerCase().trim()) return false;
@@ -97,7 +99,7 @@ function render(){
 
   // somas
   let somas={},total=0;
-  filtrados.forEach(t=>{
+  FILTRADOS.forEach(t=>{
     const m=t.meio_pagamento||"Outros";
     const v=parseFloat(t.valor)||0;
     somas[m]=(somas[m]||0)+v;
@@ -107,7 +109,7 @@ function render(){
   resumo+=` • Total: <b>${BRL(total)}</b>`;
   document.getElementById("somas").innerHTML=resumo;
 
-  filtrados.forEach(t=>{
+  FILTRADOS.forEach(t=>{
     const tr=document.createElement("tr");
     if(t.status==="Liquidado") tr.classList.add("linha-confirmada");
     const historico=(t.historico||"-").toString().replace(/\n/g,"<br>");
@@ -152,6 +154,31 @@ async function toggleStatus(chk,emp,linha){
   }
 }
 
+async function liquidarMassa(){
+  if(FILTRADOS.length===0) return alert("Nenhum título encontrado nos filtros atuais.");
+  if(!confirm(`Deseja liquidar ${FILTRADOS.length} títulos filtrados?`)) return;
+  
+  for(const t of FILTRADOS){
+    if(t.status==="Aprovado"){ // só aprova os que podem
+      try{
+        const r=await fetch(`${endpoint}?action=atualizar&empresa=${encodeURIComponent(t.empresa)}&linha=${t.linha}&status=Liquidado`);
+        const txt=await r.text();
+        if(txt.includes("sucesso")||txt.includes("success")){
+          // Atualiza na tela
+          const tr=[...document.querySelectorAll("#lista tr")].find(row=>row.children[0].innerText===t.fornecedor);
+          if(tr){
+            tr.classList.add("linha-confirmada");
+            const tdStatus=tr.querySelector(".status");
+            tdStatus.textContent="Liquidado";
+            tdStatus.className="status liquidado";
+            tr.querySelector("input[type=checkbox]").checked=true;
+          }
+        }
+      }catch(e){console.error("Erro ao liquidar em massa",t,e);}
+    }
+  }
+}
+
 async function refresh(){
   const empresa=document.getElementById("filtroEmpresa").value;
   try{
@@ -159,7 +186,6 @@ async function refresh(){
     const data=await r.json();
     const titulos=(data.titulos||data).map(t=>({...t,empresa}));
     TODOS=titulos;
-    // carrega as demais
     EMPRESAS.filter(e=>e!==empresa).forEach(emp=>{
       fetch(`${endpoint}?action=listar&empresa=${encodeURIComponent(emp)}`)
         .then(r=>r.json())
