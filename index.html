@@ -5,22 +5,16 @@
 <title>CAP Simplificado</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-<!-- 🔹 Ícone que aparece na aba do navegador -->
+<!-- 🔹 Ícone -->
 <link rel="icon" type="image/png" href="https://github.com/ClenaStore/capsimples/blob/main/paste/Design%20sem%20nome%20(25).png?raw=true" />
 <link rel="apple-touch-icon" href="https://github.com/ClenaStore/capsimples/blob/main/paste/Design%20sem%20nome%20(25).png?raw=true" />
 
-<!-- 🔹 Open Graph para quando compartilhar o link -->
+<!-- 🔹 Meta compartilhamento -->
 <meta property="og:title" content="CAP Simplificado" />
-<meta property="og:description" content="Painel simplificado para controle e liquidação de CAPs." />
+<meta property="og:description" content="Painel de acompanhamento de parcelas aprovadas" />
 <meta property="og:image" content="https://github.com/ClenaStore/capsimples/blob/main/paste/Design%20sem%20nome%20(25).png?raw=true" />
 <meta property="og:url" content="https://clenastore.github.io/capsimples/" />
 <meta property="og:type" content="website" />
-
-<!-- 🔹 Twitter Card -->
-<meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="CAP Simplificado" />
-<meta name="twitter:description" content="Painel simplificado para controle e liquidação de CAPs." />
-<meta name="twitter:image" content="https://github.com/ClenaStore/capsimples/blob/main/paste/Design%20sem%20nome%20(25).png?raw=true" />
 
 <style>
   body{margin:0;font-family:Arial, sans-serif;background:#0b1220;color:#e5f0ff}
@@ -40,6 +34,19 @@
   b.obs-leonardo{color:#ef4444;font-weight:700}
   tr.linha-confirmada {background-color:rgba(22,163,74,0.15);transition:background 0.3s ease;}
   button.mass-action {margin-left:auto;background:#16a34a;cursor:pointer}
+
+  /* Overlay de carregamento */
+  #overlay {
+    position: fixed;
+    top:0;left:0;right:0;bottom:0;
+    background:rgba(0,0,0,0.7);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    color:#fff;
+    font-size:20px;
+    z-index:9999;
+  }
 </style>
 </head>
 <body>
@@ -91,6 +98,9 @@
     <tbody id="lista"></tbody>
   </table>
 </div>
+
+<!-- Overlay -->
+<div id="overlay">🔄 Carregando dados...</div>
 
 <script>
 const endpoint="https://script.google.com/macros/s/AKfycbzJS4UkF6WZ-duyMJW_h3e5fo4Hev6Hq1a7rGhWNYCNJ6V_ou0lkN6wS49eeANf4Yuy/exec";
@@ -156,7 +166,7 @@ async function toggleStatus(chk,emp,linha){
     const txt=await r.text();
     if(!(txt.includes("sucesso")||txt.includes("success"))){
       alert("Erro: "+txt);
-      chk.checked=!chk.checked; // desfaz
+      chk.checked=!chk.checked;
     }else{
       tdStatus.textContent=novoStatus;
       tdStatus.className="status "+novoStatus.toLowerCase();
@@ -177,12 +187,11 @@ async function liquidarMassa(){
   if(!confirm(`Deseja liquidar ${FILTRADOS.length} títulos filtrados?`)) return;
   
   for(const t of FILTRADOS){
-    if(t.status==="Aprovado"){ // só aprova os que podem
+    if(t.status==="Aprovado"){
       try{
         const r=await fetch(`${endpoint}?action=atualizar&empresa=${encodeURIComponent(t.empresa)}&linha=${t.linha}&status=Liquidado`);
         const txt=await r.text();
         if(txt.includes("sucesso")||txt.includes("success")){
-          // Atualiza na tela
           const tr=[...document.querySelectorAll("#lista tr")].find(row=>row.children[0].innerText===t.fornecedor);
           if(tr){
             tr.classList.add("linha-confirmada");
@@ -199,23 +208,16 @@ async function liquidarMassa(){
 
 async function refresh(){
   const empresa=document.getElementById("filtroEmpresa").value;
+  document.getElementById("overlay").style.display="flex"; // mostra overlay
   try{
     const r=await fetch(`${endpoint}?action=listar&empresa=${encodeURIComponent(empresa)}`);
     const data=await r.json();
-    const titulos=(data.titulos||data).map(t=>({...t,empresa}));
-    TODOS=titulos;
-    EMPRESAS.filter(e=>e!==empresa).forEach(emp=>{
-      fetch(`${endpoint}?action=listar&empresa=${encodeURIComponent(emp)}`)
-        .then(r=>r.json())
-        .then(d=>{
-          const ts=(d.titulos||d).map(t=>({...t,empresa:emp}));
-          TODOS=TODOS.concat(ts);
-          render();
-        })
-        .catch(e=>console.error("Erro carregando",emp,e));
-    });
+    TODOS=(data.titulos||data).map(t=>({...t,empresa}));
     render();
   }catch(e){console.error(e);}
+  finally{
+    document.getElementById("overlay").style.display="none"; // esconde overlay
+  }
 }
 
 ["filtroStatus","filtroMeio","filtroEmpresa"].forEach(id=>document.getElementById(id).onchange=refresh);
