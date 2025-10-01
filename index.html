@@ -94,13 +94,22 @@ function render(){
     return true;
   });
 
-  let somas={};
-  filtrados.forEach(t=>{
-    const m=t.meio_pagamento||"Outros";
-    const v=parseFloat(t.valor)||0;
-    somas[m]=(somas[m]||0)+v;
-  });
-  document.getElementById("somas").innerHTML=Object.entries(somas).map(([m,v])=>`${m}: <b>${BRL(v)}</b>`).join(" • ");
+let somas={};
+let total=0;
+filtrados.forEach(t=>{
+  const m=t.meio_pagamento||"Outros";
+  const v=parseFloat(t.valor)||0;
+  somas[m]=(somas[m]||0)+v;
+  total+=v;
+});
+
+let resumo = Object.entries(somas)
+  .map(([m,v])=>`${m}: <b>${BRL(v)}</b>`)
+  .join(" • ");
+
+resumo += ` • Total: <b>${BRL(total)}</b>`;
+
+document.getElementById("somas").innerHTML=resumo;
 
   filtrados.forEach(t=>{
     const tr=document.createElement("tr");
