@@ -73,9 +73,10 @@
 
 <script>
 const endpoint="https://script.google.com/macros/s/AKfycbzJS4UkF6WZ-duyMJW_h3e5fo4Hev6Hq1a7rGhWNYCNJ6V_ou0lkN6wS49eeANf4Yuy/exec";
+const EMPRESAS=["cap delicia","cap villa","cap padaria","cap mercatto","cap m.kids"];
 const BRL=n=>(isNaN(n)?0:n).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const iso = d => {const dt=new Date(d);dt.setMinutes(dt.getMinutes()-dt.getTimezoneOffset());return dt.toISOString().slice(0,10);};
-let TITULOS=[];
+let TITULOS=[],TODOS=[];
 
 function render(){
   const lista=document.getElementById("lista");
@@ -85,7 +86,7 @@ function render(){
   const empresa=document.getElementById("filtroEmpresa").value;
   const termo=document.getElementById("barraPesquisa").value.toLowerCase();
 
-  const filtrados=TITULOS.filter(t=>{
+  const filtrados=TODOS.filter(t=>{
     if(status && (t.status||"").toLowerCase().trim() !== status.toLowerCase().trim()) return false;
     if(meio && (t.meio_pagamento||"").toLowerCase().trim() !== meio.toLowerCase().trim()) return false;
     if(empresa && (t.empresa||"").toLowerCase().trim() !== empresa.toLowerCase().trim()) return false;
@@ -93,7 +94,6 @@ function render(){
     return true;
   });
 
-  // somas por modalidade
   let somas={};
   filtrados.forEach(t=>{
     const m=t.meio_pagamento||"Outros";
@@ -102,7 +102,6 @@ function render(){
   });
   document.getElementById("somas").innerHTML=Object.entries(somas).map(([m,v])=>`${m}: <b>${BRL(v)}</b>`).join(" • ");
 
-  // tabela
   filtrados.forEach(t=>{
     const tr=document.createElement("tr");
     const historico=(t.historico||"-").toString().replace(/\n/g,"<br>");
@@ -116,7 +115,7 @@ function render(){
       <td>${historico}</td>
       <td><b class="obs-leonardo">${obs}</b></td>
       <td class="status ${(t.status||"").toLowerCase()}">${t.status||"-"}</td>
-      <td><input type="checkbox" ${t.status==="Liquidado"?"checked disabled":""} onchange="liquidar(this,'${t.empresa}','${t.linha}')"></td>
+      <td><input type="checkbox" ${t.status==="Aprovado"?"":"disabled"} ${t.status==="Liquidado"?"checked disabled":""} onchange="liquidar(this,'${t.empresa}','${t.linha}')"></td>
     `;
     lista.appendChild(tr);
   });
@@ -136,17 +135,34 @@ async function liquidar(chk,emp,linha){
 }
 
 async function refresh(){
-  const emp=document.getElementById("filtroEmpresa").value;
-  const r=await fetch(`${endpoint}?action=listar&empresa=${encodeURIComponent(emp)}`);
-  const data=await r.json();
-  TITULOS=data.titulos||data;
-  render();
+  const empresa=document.getElementById("filtroEmpresa").value;
+  try{
+    // carrega a principal
+    const r=await fetch(`${endpoint}?action=listar&empresa=${encodeURIComponent(empresa)}`);
+    const data=await r.json();
+    const titulos=(data.titulos||data).map(t=>({...t,empresa}));
+    TODOS=titulos;
+
+    // carrega as demais em background
+    EMPRESAS.filter(e=>e!==empresa).forEach(emp=>{
+      fetch(`${endpoint}?action=listar&empresa=${encodeURIComponent(emp)}`)
+        .then(r=>r.json())
+        .then(d=>{
+          const ts=(d.titulos||d).map(t=>({...t,empresa:emp}));
+          TODOS=TODOS.concat(ts);
+          render();
+        })
+        .catch(e=>console.error("Erro carregando",emp,e));
+    });
+
+    render();
+  }catch(e){console.error(e);}
 }
 
-// eventos
 ["filtroStatus","filtroMeio","filtroEmpresa"].forEach(id=>document.getElementById(id).onchange=refresh);
 document.getElementById("barraPesquisa").oninput=render;
 refresh();
+setInterval(refresh,10000); // auto refresh
 </script>
 </body>
 </html>
