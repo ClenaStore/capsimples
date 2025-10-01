@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<title>CAP Simplificado</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
+<style>
+  body{margin:0;font-family:Arial, sans-serif;background:#0b1220;color:#e5f0ff}
+  header{padding:12px;background:#101a2f;position:sticky;top:0;z-index:10}
+  h1{margin:0 0 10px;font-size:18px}
+  select,input{padding:6px;border-radius:6px;border:1px solid #22314b;background:#0b1528;color:#e5f0ff;font-size:14px}
+  .filtros{display:flex;flex-wrap:wrap;gap:6px}
+  .somas{margin:10px 0;padding:10px;background:#101a2f;border:1px solid #22314b;border-radius:6px;font-size:14px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{padding:8px;border-bottom:1px solid #22314b;text-align:left}
+  th{background:#101a2f}
+  .status{font-weight:600}
+  .status.aprovado{color:#16a34a}
+  .status.negado{color:#ef4444}
+  .status.pendente{color:#f59e0b}
+  .status.liquidado{color:#3b82f6}
+</style>
+</head>
+<body>
+<header>
+  <h1>CAP Simplificado</h1>
+  <div class="filtros">
+    <select id="filtroStatus">
+      <option value="">Todos Status</option>
+      <option>Aprovado</option>
+      <option>Negado</option>
+      <option>Pendente</option>
+      <option>Liquidado</option>
+    </select>
+    <select id="filtroMeio">
+      <option value="">Todos Meios</option>
+      <option>PIX</option>
+      <option>Cartão</option>
+      <option>Boleto</option>
+      <option>Outros</option>
+    </select>
+    <select id="filtroEmpresa">
+      <option value="cap delicia">DELÍCIA GOURMET</option>
+      <option value="cap villa">VILLA GOURMET</option>
+      <option value="cap padaria">PADARIA DELÍCIA</option>
+      <option value="cap mercatto">MERCATTO</option>
+      <option value="cap m.kids">M.KIDS</option>
+    </select>
+    <input type="text" id="filtroPeriodo" placeholder="Período" />
+    <input type="text" id="barraPesquisa" placeholder="🔍 Pesquisar..." />
+  </div>
+</header>
+
+<div class="container" style="padding:10px">
+  <div class="somas" id="somas"></div>
+  <table>
+    <thead>
+      <tr>
+        <th>Fornecedor</th>
+        <th>Empresa</th>
+        <th>Vencimento</th>
+        <th>Meio</th>
+        <th>Valor</th>
+        <th>Status</th>
+        <th>Liquidar</th>
+      </tr>
+    </thead>
+    <tbody id="lista"></tbody>
+  </table>
+</div>
+
+<script>
+const endpoint="https://script.google.com/macros/s/AKfycbzJS4UkF6WZ-duyMJW_h3e5fo4Hev6Hq1a7rGhWNYCNJ6V_ou0lkN6wS49eeANf4Yuy/exec";
+const BRL=n=>(isNaN(n)?0:n).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+const iso = d => {const dt=new Date(d);dt.setMinutes(dt.getMinutes()-dt.getTimezoneOffset());return dt.toISOString().slice(0,10);};
+let TITULOS=[];
+
+function toDate(str){
+  if(!str) return null;
+  if(str.includes("-")) return new Date(str+"T00:00:00");
+  const [d,m,y]=str.split("/");
+  return new Date(`${y}-${m}-${d}T00:00:00`);
+}
+
+function render(){
+  const lista=document.getElementById("lista");
+  lista.innerHTML="";
+  const status=document.getElementById("filtroStatus").value;
+  const meio=document.getElementById("filtroMeio").value;
+  const empresa=document.getElementById("filtroEmpresa").value;
+  const termo=document.getElementById("barraPesquisa").value.toLowerCase();
+  const periodo=document.getElementById("filtroPeriodo")._flatpickr.selectedDates;
+  let ini=fim=null;
+  if(periodo.length){ini=iso(periodo[0]);fim=iso(periodo[1]||periodo[0]);}
+
+  const filtrados=TITULOS.filter(t=>{
+    if(status && t.status!==status) return false;
+    if(meio && t.meio_pagamento!==meio) return false;
+    if(empresa && t.empresa!==empresa) return false;
+    if(termo && ![t.fornecedor,t.empresa,t.meio_pagamento,t.status].some(v=>v?.toLowerCase().includes(termo))) return false;
+    const d=iso(t.vencimento);
+    if(ini && d<ini) return false;
+    if(fim && d>fim) return false;
+    return true;
+  });
+
+  let somas={};
+  filtrados.forEach(t=>{
+    const m=t.meio_pagamento||"Outros";
+    const v=parseFloat(t.valor)||0;
+    somas[m]=(somas[m]||0)+v;
+  });
+  document.getElementById("somas").innerHTML=Object.entries(somas).map(([m,v])=>`${m}: <b>${BRL(v)}</b>`).join(" • ");
+
+  filtrados.forEach(t=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
+      <td>${t.fornecedor||"-"}</td>
+      <td>${t.empresa||"-"}</td>
+      <td>${iso(t.vencimento).split("-").reverse().join("/")}</td>
+      <td>${t.meio_pagamento||"Outros"}</td>
+      <td>${BRL(parseFloat(t.valor)||0)}</td>
+      <td class="status ${t.status.toLowerCase()}">${t.status}</td>
+      <td><input type="checkbox" ${t.status==="Liquidado"?"checked disabled":""} onchange="liquidar(this,'${t.empresa}','${t.linha}')"></td>
+    `;
+    lista.appendChild(tr);
+  });
+}
+
+async function liquidar(chk,emp,linha){
+  if(!chk.checked) return;
+  try{
+    const r=await fetch(`${endpoint}?action=atualizar&empresa=${encodeURIComponent(emp)}&linha=${linha}&status=Liquidado`);
+    const txt=await r.text();
+    if(!(txt.includes("sucesso")||txt.includes("success"))){
+      alert("Erro: "+txt);chk.checked=false;
+    }else{
+      refresh();
+    }
+  }catch(e){console.error(e);chk.checked=false;}
+}
+
+async function refresh(){
+  const emp=document.getElementById("filtroEmpresa").value;
+  const r=await fetch(`${endpoint}?action=listar&empresa=${encodeURIComponent(emp)}`);
+  const data=await r.json();
+  TITULOS=data.titulos||data;
+  render();
+}
+
+flatpickr("#filtroPeriodo",{mode:"range",dateFormat:"d/m/Y",locale:"pt",onClose:render});
+["filtroStatus","filtroMeio","filtroEmpresa"].forEach(id=>document.getElementById(id).onchange=refresh);
+document.getElementById("barraPesquisa").oninput=render;
+refresh();
+</script>
+</body>
+</html>
