@@ -12,13 +12,14 @@
   .filtros{display:flex;flex-wrap:wrap;gap:6px}
   .somas{margin:10px 0;padding:10px;background:#101a2f;border:1px solid #22314b;border-radius:6px;font-size:14px}
   table{width:100%;border-collapse:collapse;font-size:14px}
-  th,td{padding:8px;border-bottom:1px solid #22314b;text-align:left}
+  th,td{padding:8px;border-bottom:1px solid #22314b;text-align:left;vertical-align:top}
   th{background:#101a2f}
   .status{font-weight:600}
   .status.aprovado{color:#16a34a}
   .status.negado{color:#ef4444}
   .status.pendente{color:#f59e0b}
   .status.liquidado{color:#3b82f6}
+  b.obs-leonardo{color:#ef4444;font-weight:700}
 </style>
 </head>
 <body>
@@ -60,6 +61,8 @@
         <th>Vencimento</th>
         <th>Meio</th>
         <th>Valor</th>
+        <th>Histórico</th>
+        <th>Obs Leonardo</th>
         <th>Status</th>
         <th>Liquidar</th>
       </tr>
@@ -83,13 +86,14 @@ function render(){
   const termo=document.getElementById("barraPesquisa").value.toLowerCase();
 
   const filtrados=TITULOS.filter(t=>{
-    if(status && t.status!==status) return false;
-    if(meio && t.meio_pagamento!==meio) return false;
-    if(empresa && t.empresa!==empresa) return false;
-    if(termo && ![t.fornecedor,t.empresa,t.meio_pagamento,t.status].some(v=>v?.toLowerCase().includes(termo))) return false;
+    if(status && (t.status||"").toLowerCase().trim() !== status.toLowerCase().trim()) return false;
+    if(meio && (t.meio_pagamento||"").toLowerCase().trim() !== meio.toLowerCase().trim()) return false;
+    if(empresa && (t.empresa||"").toLowerCase().trim() !== empresa.toLowerCase().trim()) return false;
+    if(termo && ![t.fornecedor,t.empresa,t.meio_pagamento,t.status,t.historico,t.observacao].some(v=>v?.toLowerCase().includes(termo))) return false;
     return true;
   });
 
+  // somas por modalidade
   let somas={};
   filtrados.forEach(t=>{
     const m=t.meio_pagamento||"Outros";
@@ -98,15 +102,20 @@ function render(){
   });
   document.getElementById("somas").innerHTML=Object.entries(somas).map(([m,v])=>`${m}: <b>${BRL(v)}</b>`).join(" • ");
 
+  // tabela
   filtrados.forEach(t=>{
     const tr=document.createElement("tr");
+    const historico=(t.historico||"-").toString().replace(/\n/g,"<br>");
+    const obs=(t.observacao||"-").toString().replace(/\n/g,"<br>");
     tr.innerHTML=`
       <td>${t.fornecedor||"-"}</td>
       <td>${t.empresa||"-"}</td>
       <td>${iso(t.vencimento).split("-").reverse().join("/")}</td>
       <td>${t.meio_pagamento||"Outros"}</td>
       <td>${BRL(parseFloat(t.valor)||0)}</td>
-      <td class="status ${t.status.toLowerCase()}">${t.status}</td>
+      <td>${historico}</td>
+      <td><b class="obs-leonardo">${obs}</b></td>
+      <td class="status ${(t.status||"").toLowerCase()}">${t.status||"-"}</td>
       <td><input type="checkbox" ${t.status==="Liquidado"?"checked disabled":""} onchange="liquidar(this,'${t.empresa}','${t.linha}')"></td>
     `;
     lista.appendChild(tr);
@@ -134,6 +143,7 @@ async function refresh(){
   render();
 }
 
+// eventos
 ["filtroStatus","filtroMeio","filtroEmpresa"].forEach(id=>document.getElementById(id).onchange=refresh);
 document.getElementById("barraPesquisa").oninput=render;
 refresh();
