@@ -20,6 +20,7 @@
   .status.pendente{color:#f59e0b}
   .status.liquidado{color:#3b82f6}
   b.obs-leonardo{color:#ef4444;font-weight:700}
+  tr.linha-confirmada {background-color:rgba(22,163,74,0.15);transition:background 0.3s ease;}
 </style>
 </head>
 <body>
@@ -76,7 +77,7 @@ const endpoint="https://script.google.com/macros/s/AKfycbzJS4UkF6WZ-duyMJW_h3e5f
 const EMPRESAS=["cap delicia","cap villa","cap padaria","cap mercatto","cap m.kids"];
 const BRL=n=>(isNaN(n)?0:n).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const iso = d => {const dt=new Date(d);dt.setMinutes(dt.getMinutes()-dt.getTimezoneOffset());return dt.toISOString().slice(0,10);};
-let TITULOS=[],TODOS=[];
+let TODOS=[];
 
 function render(){
   const lista=document.getElementById("lista");
@@ -94,25 +95,21 @@ function render(){
     return true;
   });
 
-let somas={};
-let total=0;
-filtrados.forEach(t=>{
-  const m=t.meio_pagamento||"Outros";
-  const v=parseFloat(t.valor)||0;
-  somas[m]=(somas[m]||0)+v;
-  total+=v;
-});
-
-let resumo = Object.entries(somas)
-  .map(([m,v])=>`${m}: <b>${BRL(v)}</b>`)
-  .join(" • ");
-
-resumo += ` • Total: <b>${BRL(total)}</b>`;
-
-document.getElementById("somas").innerHTML=resumo;
+  // somas
+  let somas={},total=0;
+  filtrados.forEach(t=>{
+    const m=t.meio_pagamento||"Outros";
+    const v=parseFloat(t.valor)||0;
+    somas[m]=(somas[m]||0)+v;
+    total+=v;
+  });
+  let resumo=Object.entries(somas).map(([m,v])=>`${m}: <b>${BRL(v)}</b>`).join(" • ");
+  resumo+=` • Total: <b>${BRL(total)}</b>`;
+  document.getElementById("somas").innerHTML=resumo;
 
   filtrados.forEach(t=>{
     const tr=document.createElement("tr");
+    if(t.status==="Liquidado") tr.classList.add("linha-confirmada");
     const historico=(t.historico||"-").toString().replace(/\n/g,"<br>");
     const obs=(t.observacao||"-").toString().replace(/\n/g,"<br>");
     tr.innerHTML=`
@@ -124,35 +121,45 @@ document.getElementById("somas").innerHTML=resumo;
       <td>${historico}</td>
       <td><b class="obs-leonardo">${obs}</b></td>
       <td class="status ${(t.status||"").toLowerCase()}">${t.status||"-"}</td>
-      <td><input type="checkbox" ${t.status==="Aprovado"?"":"disabled"} ${t.status==="Liquidado"?"checked disabled":""} onchange="liquidar(this,'${t.empresa}','${t.linha}')"></td>
+      <td><input type="checkbox" ${t.status==="Liquidado"?"checked":""} ${t.status==="Negado"||t.status==="Pendente"?"disabled":""} onchange="toggleStatus(this,'${t.empresa}','${t.linha}')"></td>
     `;
     lista.appendChild(tr);
   });
 }
 
-async function liquidar(chk,emp,linha){
-  if(!chk.checked) return;
+async function toggleStatus(chk,emp,linha){
+  const tr=chk.closest("tr");
+  const tdStatus=tr.querySelector(".status");
+  let novoStatus = chk.checked ? "Liquidado" : "Aprovado";
   try{
-    const r=await fetch(`${endpoint}?action=atualizar&empresa=${encodeURIComponent(emp)}&linha=${linha}&status=Liquidado`);
+    const r=await fetch(`${endpoint}?action=atualizar&empresa=${encodeURIComponent(emp)}&linha=${linha}&status=${novoStatus}`);
     const txt=await r.text();
     if(!(txt.includes("sucesso")||txt.includes("success"))){
-      alert("Erro: "+txt);chk.checked=false;
+      alert("Erro: "+txt);
+      chk.checked=!chk.checked; // desfaz
     }else{
-      refresh();
+      tdStatus.textContent=novoStatus;
+      tdStatus.className="status "+novoStatus.toLowerCase();
+      if(novoStatus==="Liquidado"){
+        tr.classList.add("linha-confirmada");
+      }else{
+        tr.classList.remove("linha-confirmada");
+      }
     }
-  }catch(e){console.error(e);chk.checked=false;}
+  }catch(e){
+    console.error(e);
+    chk.checked=!chk.checked;
+  }
 }
 
 async function refresh(){
   const empresa=document.getElementById("filtroEmpresa").value;
   try{
-    // carrega a principal
     const r=await fetch(`${endpoint}?action=listar&empresa=${encodeURIComponent(empresa)}`);
     const data=await r.json();
     const titulos=(data.titulos||data).map(t=>({...t,empresa}));
     TODOS=titulos;
-
-    // carrega as demais em background
+    // carrega as demais
     EMPRESAS.filter(e=>e!==empresa).forEach(emp=>{
       fetch(`${endpoint}?action=listar&empresa=${encodeURIComponent(emp)}`)
         .then(r=>r.json())
@@ -163,7 +170,6 @@ async function refresh(){
         })
         .catch(e=>console.error("Erro carregando",emp,e));
     });
-
     render();
   }catch(e){console.error(e);}
 }
@@ -171,7 +177,7 @@ async function refresh(){
 ["filtroStatus","filtroMeio","filtroEmpresa"].forEach(id=>document.getElementById(id).onchange=refresh);
 document.getElementById("barraPesquisa").oninput=render;
 refresh();
-setInterval(refresh,10000); // auto refresh
+setInterval(refresh,10000);
 </script>
 </body>
 </html>
