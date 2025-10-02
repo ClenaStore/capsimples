@@ -110,6 +110,13 @@ const endpoint="https://script.google.com/macros/s/AKfycbzJS4UkF6WZ-duyMJW_h3e5f
 const EMPRESAS=["cap delicia","cap villa","cap padaria","cap mercatto","cap m.kids"];
 const BRL=n=>(isNaN(n)?0:n).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const iso = d => {const dt=new Date(d);dt.setMinutes(dt.getMinutes()-dt.getTimezoneOffset());return dt.toISOString().slice(0,10);};
+  function normalizaValor(v) {
+  if (typeof v === "string") {
+    // remove R$, pontos de milhar e troca vírgula por ponto
+    return parseFloat(v.replace(/[^\d,-]/g, "").replace(",", ".")) || 0;
+  }
+  return parseFloat(v) || 0;
+}
 let TODOS=[], FILTRADOS=[];
 
 function render(){
@@ -130,11 +137,11 @@ function render(){
 
   let somas={},total=0;
   FILTRADOS.forEach(t=>{
-    const m=t.meio_pagamento||"Outros";
-    const v=parseFloat(t.valor)||0;
-    somas[m]=(somas[m]||0)+v;
-    total+=v;
-  });
+  const m = t.meio_pagamento || "Outros";
+  const v = normalizaValor(t.valor);
+  somas[m] = (somas[m]||0) + v;
+  total += v;
+});
   let resumo=Object.entries(somas).map(([m,v])=>`${m}: <b>${BRL(v)}</b>`).join(" • ");
   resumo+=` • Total: <b>${BRL(total)}</b>`;
   document.getElementById("somas").innerHTML=resumo;
@@ -149,7 +156,7 @@ function render(){
       <td>${t.empresa||"-"}</td>
       <td>${iso(t.vencimento).split("-").reverse().join("/")}</td>
       <td>${t.meio_pagamento||"Outros"}</td>
-      <td>${BRL(parseFloat(t.valor)||0)}</td>
+      <td>${BRL(normalizaValor(t.valor))}</td>
       <td>${historico}</td>
       <td><b class="obs-leonardo">${obs}</b></td>
       <td class="status ${(t.status||"").toLowerCase()}">${t.status||"-"}</td>
