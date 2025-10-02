@@ -88,19 +88,20 @@
 <div class="container" style="padding:10px">
   <div class="somas" id="somas"></div>
   <table>
-    <thead>
-      <tr>
-        <th>Fornecedor</th>
-        <th>Empresa</th>
-        <th>Vencimento</th>
-        <th>Meio</th>
-        <th>Valor</th>
-        <th>Histórico</th>
-        <th>Obs Leonardo</th>
-        <th>Status</th>
-        <th>Liquidar</th>
-      </tr>
-    </thead>
+<thead>
+  <tr>
+    <th>Liquidar</th>
+    <th>Fornecedor</th>
+    <th>Empresa</th>
+    <th>Vencimento</th>
+    <th>Meio</th>
+    <th>Valor</th>
+    <th>Histórico</th>
+    <th>Obs Leonardo</th>
+    <th>Status</th>
+  </tr>
+</thead>
+
     <tbody id="lista"></tbody>
   </table>
 </div>
@@ -151,17 +152,18 @@ function render(){
     if(t.status==="Liquidado") tr.classList.add("linha-confirmada");
     const historico=(t.historico||"-").toString().replace(/\n/g,"<br>");
     const obs=(t.observacao||"-").toString().replace(/\n/g,"<br>");
-    tr.innerHTML=`
-      <td>${t.fornecedor||"-"}</td>
-      <td>${t.empresa||"-"}</td>
-      <td>${iso(t.vencimento).split("-").reverse().join("/")}</td>
-      <td>${t.meio_pagamento||"Outros"}</td>
-      <td>${BRL(normalizaValor(t.valor))}</td>
-      <td>${historico}</td>
-      <td><b class="obs-leonardo">${obs}</b></td>
-      <td class="status ${(t.status||"").toLowerCase()}">${t.status||"-"}</td>
-      <td><input type="checkbox" ${t.status==="Liquidado"?"checked":""} ${t.status==="Negado"||t.status==="Pendente"?"disabled":""} onchange="toggleStatus(this,'${t.empresa}','${t.linha}')"></td>
-    `;
+   tr.innerHTML=`
+  <td><input type="checkbox" ${t.status==="Liquidado"?"checked":""} ${t.status==="Negado"||t.status==="Pendente"?"disabled":""} onchange="toggleStatus(this,'${t.empresa}','${t.linha}')"></td>
+  <td>${t.fornecedor||"-"}</td>
+  <td>${t.empresa||"-"}</td>
+  <td>${iso(t.vencimento).split("-").reverse().join("/")}</td>
+  <td>${t.meio_pagamento||"Outros"}</td>
+  <td>${BRL(normalizaValor(t.valor))}</td>
+  <td>${historico}</td>
+  <td><b class="obs-leonardo">${obs}</b></td>
+  <td class="status ${(t.status||"").toLowerCase()}">${t.status||"-"}</td>
+`;
+
     lista.appendChild(tr);
   });
 }
